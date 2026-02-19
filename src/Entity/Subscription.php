@@ -119,6 +119,12 @@ class Subscription
     {
         return $this->logoFile;
     }
+    public function getLogoPublicUrl(): ?string
+    {
+        if (!$this->logoName) return null;
+        // Remplace par ton vrai domaine de dev pour les tests
+        return "http://127.0.0.1:8000/logos/" . $this->logoName;
+    }
 
     public function setLogoFile(?File $logoFile): void
     {

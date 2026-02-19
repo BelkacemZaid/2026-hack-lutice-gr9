@@ -26,16 +26,17 @@
                         {{ form_widget(form.logoFile, {'attr': {'class': 'form-control'}}) }}
                     </div>
 
-                    <div class="border-top pt-3 mt-3">
-                        <h5>Paiement Simulé</h5>
-                        <input type="text" class="form-control mb-2" placeholder="4242 4242 4242 4242" required>
-                        <div class="row g-2">
-                            <div class="col-6"><input type="text" class="form-control" placeholder="MM/YY" required></div>
-                            <div class="col-6"><input type="text" class="form-control" placeholder="CVC" required></div>
-                        </div>
+                    {# Les deux boutons d'action (Simulation ou Stripe) #}
+                    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mt-4 border-top pt-4">
+                        <button type="submit" name="payment_action" value="simulate" class="btn btn-outline-secondary btn-lg w-100">
+                            ⚙️ Simuler sans payer
+                        </button>
+
+                        <button type="submit" name="payment_action" value="stripe" class="btn btn-primary btn-lg shadow w-100">
+                            💳 Payer avec Stripe
+                        </button>
                     </div>
 
-                    <button type="submit" class="btn btn-success btn-lg w-100 mt-4 shadow">Valider et Déployer</button>
                     {{ form_end(form) }}
                 </div>
             </div>

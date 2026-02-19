@@ -2,17 +2,21 @@
 
 namespace App\Controller;
 
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use App\Entity\Subscription;
 use App\Enum\OfferType;
 use App\Enum\StatusEnum;
 use App\Form\SubscriptionType;
 use App\Repository\SubscriptionRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Stripe\Stripe;
+use Stripe\Checkout\Session;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class SubscriptionController extends AbstractController
 {
@@ -51,7 +55,6 @@ class SubscriptionController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             // Génération du sous-domaine (Exigence F-PORT-02)
-            // On nettoie le nom : minuscules, suppression des caractères spéciaux
             $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9-]/', '', $subscription->getClientName()));
             $subscription->setDomain($cleanName . '.lutice.com');
 
@@ -61,8 +64,16 @@ class SubscriptionController extends AbstractController
             $this->em->persist($subscription);
             $this->em->flush();
 
-            // Redirection vers le formulaire de paiement (simulé)
-            return $this->redirectToRoute('app_paiement_process', ['id' => $subscription->getId()]);
+            // --- GESTION DES DEUX BOUTONS ---
+            $action = $request->request->get('payment_action');
+
+            if ($action === 'simulate') {
+                // Si le bouton "Simuler" a été cliqué, on va direct au process (sans payer)
+                return $this->redirectToRoute('app_paiement_process', ['id' => $subscription->getId()]);
+            }
+
+            // Sinon (par défaut ou si clic sur Stripe), on redirige vers Stripe
+            return $this->redirectToRoute('app_paiement_stripe', ['id' => $subscription->getId()]);
         }
 
         return $this->render('portal/formulaire.html.twig', [
@@ -72,24 +83,73 @@ class SubscriptionController extends AbstractController
     }
 
     /**
-     * Étape 3 : Simulation du paiement (F-PORT-04)
-     * Cette route valide le paiement et déclenche virtuellement le provisionnement.
+     * Étape 3 (NOUVEAU) : Création de la session Stripe
+     */
+    #[Route('/paiement/stripe/{id}', name: 'app_paiement_stripe')]
+    public function payWithStripe(Subscription $subscription, UrlGeneratorInterface $router, #[Autowire('%env(STRIPE_SECRET_KEY)%')] string $stripeSecretKey): Response
+    {
+        // CORRECTION : On utilise la variable injectée au lieu de $_ENV
+        Stripe::setApiKey($stripeSecretKey);
+
+        $session = Session::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'eur',
+                    'product_data' => [
+                        'name' => 'Offre Lutice ' . $subscription->getOfferType()->value,
+                    ],
+                    // Prix en centimes
+                    'unit_amount' => ($subscription->getOfferType()->value === 'start2') ? 5000 : 20000,
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+            // SI SUCCÈS : Stripe renvoie le client ici
+            'success_url' => $router->generate('app_paiement_process', ['id' => $subscription->getId()], UrlGeneratorInterface::ABSOLUTE_URL),
+            // SI ANNULÉ : On le renvoie à l'accueil
+            'cancel_url' => $router->generate('app_offres', [], UrlGeneratorInterface::ABSOLUTE_URL),
+        ]);
+
+        return $this->redirect($session->url, 303);
+    }
+
+    /**
+     * Étape 4 : Validation du paiement et lancement (F-PORT-04)
+     * Cette route est appelée par Stripe une fois le paiement validé.
      */
     #[Route('/paiement-process/{id}', name: 'app_paiement_process')]
     public function processPayment(Subscription $subscription): Response
     {
-        // Ici, on simule un succès de paiement (Exigence F-PORT-04)
-        // On passe le statut à PROVISIONING pour informer l'utilisateur
+        // Le paiement a réussi sur Stripe (ou a été simulé), on valide en base !
         $subscription->setStatus(StatusEnum::PROVISIONING);
-
         $this->em->flush();
 
-        // Une fois payé, on envoie le client sur la page de suivi en temps réel
+        // Une fois validé, on envoie le client sur la page de suivi en temps réel
         return $this->redirectToRoute('app_suivi', ['id' => $subscription->getId()]);
     }
 
     /**
-     * Étape 4 : Page de suivi (F-PORT-05)
+     * Webhook de fin de déploiement pour l'équipe Infra
+     */
+    #[Route('/api/callback/deploy-ready/{id}', name: 'api_deploy_callback', methods: ['POST'])]
+    public function deployCallback(Subscription $subscription, Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+
+        if (isset($data['ip'])) {
+            $subscription->setIpAddress($data['ip']);
+            $subscription->setPublicIp($data['ip']);
+        }
+
+        $subscription->setStatus(StatusEnum::READY);
+        $this->em->flush();
+
+        return $this->json(['message' => 'Statut mis à jour avec succès']);
+    }
+
+    /**
+     * Étape 5 : Page de suivi (F-PORT-05)
      */
     #[Route('/suivi/{id}', name: 'app_suivi')]
     public function suivi(Subscription $subscription): Response
@@ -101,13 +161,12 @@ class SubscriptionController extends AbstractController
 
     /**
      * API pour le polling JavaScript (F-PORT-05)
-     * Renvoie le statut actuel en JSON pour mettre à jour la barre de progression.
      */
     #[Route('/api/status/{id}', name: 'api_status', methods: ['GET'])]
     public function apiStatus(Subscription $subscription): JsonResponse
     {
         return $this->json([
-            'status' => $subscription->getStatus()->value, // On récupère la valeur de l'Enum string
+            'status' => $subscription->getStatus()->value,
             'url' => 'https://' . $subscription->getDomain(),
             'errorMessage' => $subscription->getErrorMessage()
         ]);
