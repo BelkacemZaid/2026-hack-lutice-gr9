@@ -1,0 +1,29 @@
+services:
+  database:
+    image: mysql:8.0
+    container_name: hackaton-mysql-db
+    ports:
+      - "3309:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootPassword2026!
+      MYSQL_DATABASE: hackaton_db
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-adminHackaton}
+    volumes:
+      - hackaton_db_data:/var/lib/mysql:rw
+
+  # 👇 AJOUTEZ CE BLOC PHPMYADMIN ICI
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: hackaton-phpmyadmin
+    environment:
+      PMA_HOST: database                    #  Nom de votre service MySQL
+      PMA_PORT: 3306                        #  Port INTERNE (pas 3309)
+      MYSQL_ROOT_PASSWORD: rootPassword2026! #  Votre mot de passe root
+    ports:
+      - "8082:80"
+    depends_on:
+      - database                            #  Nom de votre service MySQL
+
+volumes:
+  hackaton_db_data:

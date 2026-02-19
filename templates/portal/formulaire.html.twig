@@ -1,0 +1,44 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <h2 class="text-center mb-4">Configuration - Offre {{ offer|upper }}</h2>
+
+                    {{ form_start(form) }}
+                    <div class="mb-3">
+                        {{ form_label(form.clientName, "Nom de l'entreprise (Sous-domaine)", {'label_attr': {'class': 'form-label'}}) }}
+                        {{ form_widget(form.clientName, {'attr': {'class': 'form-control', 'placeholder': 'ex: ecole-michelet'}}) }}
+                        <div class="form-text text-light-50 small">Accessible via https://<b>nom</b>.lutice.com.</div>
+                        <div class="text-danger small">{{ form_errors(form.clientName) }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.clientEmail, "Email administrateur", {'label_attr': {'class': 'form-label'}}) }}
+                        {{ form_widget(form.clientEmail, {'attr': {'class': 'form-control', 'placeholder': 'admin@exemple.com'}}) }}
+                        <div class="text-danger small">{{ form_errors(form.clientEmail) }}</div>
+                    </div>
+
+                    <div class="mb-4">
+                        {{ form_label(form.logoFile, "Logo de l'instance (Optionnel)", {'label_attr': {'class': 'form-label'}}) }}
+                        {{ form_widget(form.logoFile, {'attr': {'class': 'form-control'}}) }}
+                    </div>
+
+                    <div class="border-top pt-3 mt-3">
+                        <h5>Paiement Simulé</h5>
+                        <input type="text" class="form-control mb-2" placeholder="4242 4242 4242 4242" required>
+                        <div class="row g-2">
+                            <div class="col-6"><input type="text" class="form-control" placeholder="MM/YY" required></div>
+                            <div class="col-6"><input type="text" class="form-control" placeholder="CVC" required></div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success btn-lg w-100 mt-4 shadow">Valider et Déployer</button>
+                    {{ form_end(form) }}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

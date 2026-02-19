@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div class="row justify-content-center text-center">
+        <div class="col-md-8">
+            <h1 id="status-title" class="mb-4 fw-bold">Initialisation...</h1>
+
+            <div class="progress mb-4" style="height: 30px; background-color: rgba(255,255,255,0.1);">
+                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 10%"></div>
+            </div>
+
+            <div id="status-spinner" class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Chargement...</span>
+            </div>
+
+            <p id="status-msg" class="lead text-secondary">
+                Veuillez patienter, nous préparons votre infrastructure.
+            </p>
+
+            <div id="final-link" class="mt-5 d-none">
+                <div class="alert alert-success">✅ Déploiement terminé !</div>
+                <a href="#" id="instance-url" class="btn btn-primary btn-lg px-5 shadow" target="_blank">Accéder à mon instance</a>
+            </div>
+
+            <div id="subscription-id" data-id="{{ subscription.id }}" class="d-none"></div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const subId = document.getElementById('subscription-id').dataset.id;
+            const title = document.getElementById('status-title');
+            const progressBar = document.getElementById('progress-bar');
+            const spinner = document.getElementById('status-spinner');
+            const finalLinkDiv = document.getElementById('final-link');
+            const instanceUrlBtn = document.getElementById('instance-url');
+
+            const config = {
+                'pending': { msg: "En attente...", pct: 10, color: 'bg-secondary' },
+                'provisioning': { msg: "Provisionnement Scaleway...", pct: 30, color: 'bg-primary' },
+                'configuring': { msg: "Configuration système...", pct: 50, color: 'bg-info' },
+                'deploying': { msg: "Déploiement Greenlight...", pct: 80, color: 'bg-warning' },
+                'ready': { msg: "Instance prête !", pct: 100, color: 'bg-success' },
+                'error': { msg: "Erreur détectée", pct: 100, color: 'bg-danger' }
+            };
+
+            function checkStatus() {
+                fetch(`/api/status/${subId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const step = config[data.status] || config['pending'];
+                        title.innerText = step.msg;
+                        progressBar.style.width = step.pct + '%';
+                        progressBar.className = `progress-bar progress-bar-striped progress-bar-animated ${step.color}`;
+
+                        if (data.status === 'ready') {
+                            spinner.classList.add('d-none');
+                            instanceUrlBtn.href = data.url;
+                            instanceUrlBtn.innerText = "Accéder à " + data.url;
+                            finalLinkDiv.classList.remove('d-none');
+                            return;
+                        }
+
+                        if (data.status === 'error') {
+                            spinner.classList.add('d-none');
+                            title.classList.add('text-danger');
+                            return;
+                        }
+
+                        setTimeout(checkStatus, 3000); // Polling toutes les 3 secondes
+                    });
+            }
+            checkStatus();
+        });
+    </script>
+{% endblock %}

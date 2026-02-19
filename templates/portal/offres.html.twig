@@ -1,0 +1,40 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div class="text-center mb-5">
+        <h1 class="display-4 fw-extrabold">Choisissez votre infrastructure</h1>
+        <p class="lead text-secondary">Déploiement automatisé de Greenlight v3 en quelques minutes.</p>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+        <div class="col-md-5">
+            <div class="card h-100 shadow-lg border-primary">
+                <div class="card-body p-5 text-center">
+                    <h2 class="h4 text-uppercase">Start-50</h2>
+                    <div class="display-3 my-3 fw-bold text-primary">29€<span class="fs-6 text-muted">/mois</span></div>
+                    <ul class="list-unstyled mb-4 text-start mx-auto" style="max-width: 250px;">
+                        <li>✅ Scaleway Start-2-S</li>
+                        <li>✅ 50 Go de stockage</li>
+                        <li>✅ Greenlight v3 + Docker</li>
+                    </ul>
+                    <a href="{{ path('app_formulaire', {'offer': 'start2'}) }}" class="btn btn-primary btn-lg w-100 rounded-pill">Choisir Start-50</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card h-100 shadow-lg">
+                <div class="card-body p-5 text-center">
+                    <h2 class="h4 text-uppercase text-info">Start-200</h2>
+                    <div class="display-3 my-3 fw-bold text-info">59€<span class="fs-6 text-muted">/mois</span></div>
+                    <ul class="list-unstyled mb-4 text-start mx-auto" style="max-width: 250px;">
+                        <li>✅ Scaleway Start-3-S</li>
+                        <li>✅ 200 Go de stockage</li>
+                        <li>✅ Support prioritaire</li>
+                    </ul>
+                    <a href="{{ path('app_formulaire', {'offer': 'start3'}) }}" class="btn btn-info btn-lg w-100 rounded-pill text-white">Choisir Start-200</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
