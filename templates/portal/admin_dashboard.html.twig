@@ -1,0 +1,83 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>🛠️ Dashboard Administrateur</h2>
+            <a href="{{ path('app_offres') }}" class="btn btn-outline-primary">Retour au site</a>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Offre</th>
+                            <th>Domaine</th>
+                            <th>Statut</th>
+                            <th>IP Serveur</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for sub in subscriptions %}
+
+                            {# Petit dictionnaire pour les couleurs des badges #}
+                            {% set badge_color = {
+                                'pending': 'bg-secondary',
+                                'provisioning': 'bg-primary',
+                                'configuring': 'bg-info',
+                                'deploying': 'bg-warning text-dark',
+                                'ready': 'bg-success',
+                                'error': 'bg-danger'
+                            } %}
+
+                            <tr>
+                                <td>{{ sub.createdAt|date('d/m/Y H:i') }}</td>
+                                <td>
+                                    <strong>{{ sub.clientName }}</strong><br>
+                                    <small class="text-muted">{{ sub.clientEmail }}</small>
+                                </td>
+                                <td><span class="badge bg-dark">{{ sub.offerType.value|upper }}</span></td>
+                                <td>
+                                    <a href="https://{{ sub.domain }}" target="_blank" class="text-decoration-none">
+                                        {{ sub.domain }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {# On affiche le badge de la bonne couleur selon le statut #}
+                                    <span class="badge {{ badge_color[sub.status.value] | default('bg-secondary') }}">
+                                        {{ sub.status.value|upper }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if sub.publicIp %}
+                                        <span class="badge bg-light text-dark border"><i class="bi bi-hdd-network"></i> {{ sub.publicIp }}</span>
+                                    {% else %}
+                                        <span class="text-muted small">En attente...</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {# Lien pour voir où en est la barre de progression de ce client #}
+                                    <a href="{{ path('app_suivi', {'id': sub.id}) }}" class="btn btn-sm btn-outline-info">
+                                        Voir le suivi
+                                    </a>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    Aucune commande pour le moment.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

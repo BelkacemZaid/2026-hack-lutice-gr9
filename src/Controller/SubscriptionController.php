@@ -171,4 +171,17 @@ class SubscriptionController extends AbstractController
             'errorMessage' => $subscription->getErrorMessage()
         ]);
     }
+    /**
+     * Dashboard Admin : Vue d'ensemble de toutes les commandes
+     */
+    #[Route('/admin/dashboard', name: 'app_admin_dashboard')]
+    public function dashboard(): Response
+    {
+        // On récupère toutes les souscriptions, triées de la plus récente à la plus ancienne
+        $subscriptions = $this->subscriptionRepository->findBy([], ['createdAt' => 'DESC']);
+
+        return $this->render('portal/admin_dashboard.html.twig', [
+            'subscriptions' => $subscriptions
+        ]);
+    }
 }
