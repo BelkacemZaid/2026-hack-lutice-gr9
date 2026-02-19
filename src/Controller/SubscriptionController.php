@@ -174,14 +174,49 @@ class SubscriptionController extends AbstractController
     /**
      * Dashboard Admin : Vue d'ensemble de toutes les commandes
      */
+    /**
+     * Dashboard Admin : Vue d'ensemble de toutes les commandes
+     */
+    /**
+     * Dashboard Admin : Vue d'ensemble de toutes les commandes
+     */
     #[Route('/admin/dashboard', name: 'app_admin_dashboard')]
-    public function dashboard(): Response
-    {
-        // On récupère toutes les souscriptions, triées de la plus récente à la plus ancienne
+    public function dashboard(
+        Request $request,
+        #[Autowire('%env(ADMIN_USERNAME)%')] string $adminUser,
+        #[Autowire('%env(ADMIN_PASSWORD)%')] string $adminPass
+    ): Response {
+
+        $user = $request->headers->get('php-auth-user');
+        $pass = $request->headers->get('php-auth-pw');
+
+        // On compare avec les variables sécurisées du .env !
+        if ($user !== $adminUser || $pass !== $adminPass) {
+            $response = new Response('Accès non autorisé', 401);
+            $response->headers->set('WWW-Authenticate', 'Basic realm="Espace Administrateur Lutice"');
+            return $response;
+        }
+
+        // Si on arrive ici, c'est que le mot de passe est bon
         $subscriptions = $this->subscriptionRepository->findBy([], ['createdAt' => 'DESC']);
 
         return $this->render('portal/admin_dashboard.html.twig', [
             'subscriptions' => $subscriptions
+        ]);
+    }
+    /**
+     * API pour l'équipe Infra (Pôles 3 & 4)
+     * Permet à Ansible de récupérer les infos de personnalisation (Logo, Domaine)
+     */
+    #[Route('/api/config/{id}', name: 'api_subscription_config', methods: ['GET'])]
+    public function getConfig(Subscription $subscription): JsonResponse
+    {
+        return $this->json([
+            'id' => $subscription->getId(),
+            'client_name' => $subscription->getClientName(),
+            'domain' => $subscription->getDomain(),
+            'offer' => $subscription->getOfferType()->value,
+            'logo_url' => $subscription->getLogoPublicUrl(),
         ]);
     }
 }

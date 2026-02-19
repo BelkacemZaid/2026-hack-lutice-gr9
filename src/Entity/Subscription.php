@@ -15,14 +15,30 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
 #[ORM\Entity(repositoryClass: SubscriptionRepository::class)]
 #[Vich\Uploadable]
 #[UniqueEntity(fields: ['clientName'], message: 'Ce nom de client est déjà utilisé')]
+#[UniqueEntity('clientEmail')]
 class Subscription
 {
     #[ORM\Id]
     #[ORM\Column(type: 'uuid')]
     private Uuid $id;
 
+    #[Assert\NotBlank(message: "Le nom de l'entreprise est obligatoire.")]
+    #[Assert\Length(
+        min: 3,
+        max: 50,
+        minMessage: "Le nom doit faire au moins {{ limit }} caractères.",
+        maxMessage: "Le nom ne peut pas dépasser {{ limit }} caractère<s."
+    )]
+    #[Assert\Regex(
+        pattern: '/^[a-zA-Z0-9-]+$/',
+        message: "Le nom ne doit contenir que des lettres sans accents, des chiffres et des tirets (pas d'espaces)."
+    )]
+    #[Assert\NotEqualTo(value: 'admin', message: 'Ce nom de domaine est réservé par le système.')]
+    #[Assert\NotEqualTo(value: 'api', message: 'Ce nom de domaine est réservé par le système.')]
+    #[Assert\NotEqualTo(value: 'www', message: 'Ce nom de domaine est réservé par le système.')]
     #[ORM\Column(length: 30, unique: true)]
-    private string $clientName;
+    private ?string $clientName = null;
+
 
     #[ORM\Column(length: 255)]
     private string $clientEmail;

@@ -1,9 +1,10 @@
-# config/packages/vich_uploader.yaml
 vich_uploader:
     db_driver: orm
-
     mappings:
-        subscription_logo: # <--- Vérifie ce nom précisément
+        subscription_logo:
             uri_prefix: /logos
             upload_destination: '%kernel.project_dir%/public/logos'
-            namer: vich_uploader.namer_uniqid
+            namer: Vich\UploaderBundle\Naming\SmartUniqueNamer
+            inject_on_load: false
+            delete_on_update: true
+            delete_on_remove: true
