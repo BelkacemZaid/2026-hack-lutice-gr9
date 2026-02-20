@@ -1,0 +1,123 @@
+- name: Setup Greenlight Local avec SSL (Fake Domain)
+  hosts: sandbox
+  become: true
+  vars:
+    gl_path: "/opt/greenlight"
+    ssl_path: "/etc/nginx/ssl"
+    # On définit un faux nom de domaine
+    domain_name: "greenlight.test"
+    db_pass: "password123"
+
+  tasks:
+    # --- 0. INSTALLATION DOCKER & DEPENDANCES ---
+    - name: Mettre à jour le cache APT
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Installer Docker et outils nécessaires
+      apt:
+        name:
+          - docker.io
+          - docker-compose-plugin
+        state: present
+
+    - name: S'assurer que le service Docker est démarré
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Créer le répertoire de déploiement Greenlight
+      file:
+        path: "{{ gl_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Installation des outils SSL
+      apt:
+        name: openssl
+        state: present
+
+    # --- 1. CONFIGURATION DU HOSTS ---
+    # Cela permet à votre Kali de comprendre que "greenlight.test" = elle-même
+    - name: Ajout du domaine fictif dans /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1 {{ domain_name }}"
+        state: present
+
+    # --- 2. GENERATION SSL (Auto-signé amélioré) ---
+    - name: Creation dossier SSL
+      file: path="{{ ssl_path }}" state=directory mode='0755'
+
+    - name: Generation certificat pour {{ domain_name }}
+      command: >
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048
+        -keyout {{ ssl_path }}/server.key
+        -out {{ ssl_path }}/server.crt
+        -subj "/C=FR/ST=Paris/L=Paris/O=Dev/CN={{ domain_name }}"
+      args:
+        creates: "{{ ssl_path }}/server.crt"
+
+    # --- 3. CONFIGURATION NGINX ---
+    - name: Configuration Nginx
+      copy:
+        dest: /etc/nginx/sites-available/greenlight
+        content: |
+          server {
+              listen 80;
+              server_name {{ domain_name }};
+              return 301 https://$host$request_uri;
+          }
+
+          server {
+              listen 443 ssl;
+              server_name {{ domain_name }};
+
+              ssl_certificate {{ ssl_path }}/server.crt;
+              ssl_certificate_key {{ ssl_path }}/server.key;
+
+              location / {
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto https;
+                  proxy_read_timeout 900;
+              }
+          }
+
+    - name: Activation et nettoyage Nginx
+      shell: |
+        ln -sf /etc/nginx/sites-available/greenlight /etc/nginx/sites-enabled/greenlight
+        rm -f /etc/nginx/sites-enabled/default
+      notify: Redemarrer Nginx
+
+    # --- 4. CONFIGURATION GREENLIGHT ---
+    - name: Creation du .env
+      copy:
+        dest: "{{ gl_path }}/.env"
+        content: |
+          SECRET_KEY_BASE={{ lookup('password', '/dev/null chars=ascii_letters,digits length=64') }}
+          URL_HOST={{ domain_name }}
+          
+          # Indispensable pour eviter les boucles de redirection en local
+          FORCE_SSL=true
+          SAFE_FOR_JETS=true
+          
+          DB_HOST=db
+          DATABASE_URL=postgresql://postgres:{{ db_pass }}@db:5432/greenlight_production
+          REDIS_URL=redis://redis:6379/1
+          
+          BIGBLUEBUTTON_ENDPOINT=https://test-install.bigbluebutton.org/bigbluebutton/api/
+          BIGBLUEBUTTON_SECRET=8cd8ef52e8e101574e69420ced01ad08
+
+    - name: Lancement Docker
+      shell: "docker compose up -d"
+      args:
+        chdir: "{{ gl_path }}"
+
+  handlers:
+    - name: Redemarrer Nginx
+      service: name=nginx state=restarted

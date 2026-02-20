@@ -1,0 +1,156 @@
+- name: Setup Greenlight x64 - Fix Postgres 
+  hosts: all
+  become: true
+  vars:
+    gl_path: "/opt/greenlight"
+    ssl_path: "/etc/nginx/ssl"
+    server_ip: "{{ server_ip }}"
+    domain_name: "{{ server_ip }}.nip.io"
+    db_pass: "password123"
+    admin_email: "rkichenassamy@lerebours.fr"
+
+  tasks:
+    - name: Installation Nginx, Docker et Certbot
+      apt:
+        name: [nginx, openssl, ca-certificates, curl, certbot, python3-certbot-nginx]
+        state: present
+        update_cache: yes
+
+    - name: Installation Docker Engine
+      shell: "curl -fsSL https://get.docker.com | sh"
+      args:
+        creates: /usr/bin/docker
+
+    - name: Creation des dossiers
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ ssl_path }}"
+        - "{{ gl_path }}"
+
+    # --- 1. CONFIGURATION NGINX & TLS ---
+    
+    - name: Config Nginx Temporaire pour Let's Encrypt
+      copy:
+        dest: /etc/nginx/sites-available/greenlight
+        content: |
+          server {
+              listen 80;
+              server_name {{ server_ip }} {{ domain_name }};
+              location /.well-known/acme-challenge/ {
+                  root /var/www/html;
+              }
+          }
+
+    - name: Activation Nginx Temporaire
+      shell: |
+        ln -sf /etc/nginx/sites-available/greenlight /etc/nginx/sites-enabled/greenlight
+        rm -f /etc/nginx/sites-enabled/default
+      notify: Redemarrer Nginx
+
+    - name: Appliquer la config temporaire
+      meta: flush_handlers
+
+    - name: Obtenir Certificat SSL Let's Encrypt
+      command: >
+        certbot certonly --nginx -d {{ domain_name }} 
+        --non-interactive --agree-tos -m {{ admin_email }}
+      args:
+        creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+
+    - name: Config Nginx Finale (SSL)
+      copy:
+        dest: /etc/nginx/sites-available/greenlight
+        content: |
+          server {
+              listen 80;
+              server_name {{ server_ip }} {{ domain_name }};
+              return 301 https://{{ domain_name }}$request_uri;
+          }
+          server {
+              listen 443 ssl;
+              server_name {{ server_ip }} {{ domain_name }};
+              
+              ssl_certificate /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/{{ domain_name }}/privkey.pem;
+
+              location / {
+                  proxy_pass http://127.0.0.1:5050;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto https;
+              }
+          }
+      notify: Redemarrer Nginx
+
+    # --- 2. CONFIGURATION DOCKER ---
+    - name: Creation du .env
+      copy:
+        dest: "{{ gl_path }}/.env"
+        content: |
+          SECRET_KEY_BASE={{ lookup('password', '/dev/null chars=ascii_letters,digits length=64') }}
+          URL_HOST={{ domain_name }}
+          FORCE_SSL=true
+          DB_PASSWORD={{ db_pass }}
+
+    - name: Creation du docker-compose.yml
+      copy:
+        dest: "{{ gl_path }}/docker-compose.yml"
+        content: |
+          version: '3'
+          services:
+            db:
+              image: postgres:14-alpine
+              container_name: postgres
+              restart: always
+              environment:
+                - POSTGRES_DB=greenlight_production
+                - POSTGRES_USER=postgres
+                - POSTGRES_PASSWORD={{ db_pass }}
+              volumes:
+                - ./db_data:/var/lib/postgresql/data
+
+            redis:
+              image: redis:6.2-alpine
+              container_name: redis
+              restart: always
+
+            app:
+              image: bigbluebutton/greenlight:v3
+              container_name: greenlight-v3
+              restart: always
+              ports:
+                - "127.0.0.1:5050:3000"
+              env_file: .env
+              environment:
+                - DATABASE_URL=postgresql://postgres:{{ db_pass }}@db:5432/greenlight_production
+                - REDIS_URL=redis://redis:6379/1
+                - BIGBLUEBUTTON_ENDPOINT=https://test-install.bigbluebutton.org/bigbluebutton/api/
+                - BIGBLUEBUTTON_SECRET=8cd8ef52e8e101574e69420ced01ad08
+              depends_on:
+                - db
+                - redis
+
+    - name: Relancer les conteneurs
+      shell: "docker compose down -v && docker compose up -d"
+      args:
+        chdir: "{{ gl_path }}"
+    
+    - name: Pause pour l'initialisation
+      pause:
+        minutes: 2
+
+    - name: Création admin Greenlight
+      shell: "docker exec greenlight-v3 bundle exec rake admin:create"
+      register: admin_output
+      ignore_errors: yes
+
+    - name: Afficher les identifiants
+      debug:
+        msg: "{{ admin_output.stdout_lines }}"
+
+  handlers:
+    - name: Redemarrer Nginx
+      service: name=nginx state=restarted
